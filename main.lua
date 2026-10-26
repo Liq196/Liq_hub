@@ -1,28 +1,26 @@
 -- [[ Blox Fruits Update 30: Ultimate Fruit Sniper & Server Hop ]]
 -- [[ Полная адаптация и исправление под патч от 26.10.2026 ]]
--- [[ Оптимизировано для Delta Emulator и ПК-исполнителей ]]
+-- [[ Переведено на Fluent UI Library специально для Delta / ПК-исполнителей ]]
 
--- ИСПРАВЛЕНО: Подключение проверенной официальной библиотеки интерфейса Redz Hub V5
-local redzlib = loadstring(game:HttpGet("https://raw.githubusercontent.com/REDzHUB/RedzLibV5/main/Source.Lua"))()
+-- Загрузка Fluent UI (Используем стабильный релиз dawid-scripts)
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 
--- Создание главного окна в стиле Redz Hub
-local Window = redzlib:MakeWindow({
-    Title = "Blox Fruits (Update 30) - Fruit Sniper GUI",
-    SubTitle = "by Liq_hub & Redz Fixed",
-    SaveFolder = "LiqHub_Redz_Config.lua"
-})
-
--- Добавление фирменной кнопки сворачивания Redz UI
-Window:AddMinimizeButton({
-    Button = { Image = "rbxassetid://71014873973869", BackgroundTransparency = 0 },
-    Corner = { CornerRadius = UDim.new(0, 5) }
+-- Создание главного окна во Fluent UI
+local Window = Fluent:CreateWindow({
+    Title = "Premium BF Hub",
+    SubTitle = "2026 Update (Fruit Sniper)",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = false, -- Выключено для повышения FPS на мобильных устройствах
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl -- Кнопка сворачивания для ПК
 })
 
 -- [[ Config & States ]]
 _G.AutoFindFruits = false
 _G.FruitFilter = {}
 
--- Актуальный список фруктов Update 30 (Добавлен Magnet, Leopard заменен на Tiger из-за копирайтов)
+-- Актуальный список фруктов Update 30
 local FruitList = {
     Common = {"Rocket", "Spin", "Chop", "Spring", "Bomb", "Smoke", "Spike"},
     Uncommon = {"Flame", "Falcon", "Ice", "Sand", "Dark", "Diamond", "Light"},
@@ -31,21 +29,23 @@ local FruitList = {
     Mythical = {"Mammoth", "T-Rex", "Dough", "Shadow", "Venom", "Control", "Spirit", "Dragon", "Tiger", "Kitsune", "Magnet"}
 }
 
--- Инициализация фильтра фруктов со значением false по умолчанию
+-- Инициализация фильтра фруктов
 for _, rarityGroup in pairs(FruitList) do
     for _, fruitName in ipairs(rarityGroup) do
         _G.FruitFilter[fruitName] = false
     end
 end
 
--- [[ Вкладки интерфейса Redz ]]
-local TabMain = Window:MakeTab({"Main Sniper", "cherry"})
-local TabFilter = Window:MakeTab({"Fruit Filter", "swords"})
-local TabSettings = Window:MakeTab({"Server Hop", "user"})
+-- [[ Вкладки интерфейса Fluent ]]
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main Sniper", Icon = "scroll" }),
+    Filter = Window:AddTab({ Title = "Fruit Filter", Icon = "swords" }),
+    Settings = Window:AddTab({ Title = "Server Hop", Icon = "user" })
+}
 
 -- [[ Элементы вкладки Main ]]
-TabMain:AddToggle({
-    Name = "Auto Find Fruits",
+local MainToggle = Tabs.Main:AddToggle("AutoFindFruitsToggle", {
+    Title = "Auto Find Fruits",
     Default = false,
     Callback = function(Value)
         _G.AutoFindFruits = Value
@@ -83,7 +83,7 @@ local function SafeFlyToFruit(targetPos)
     end
 end
 
--- Перевод запросов на RoProxy API, так как Roblox блокирует прямые HTTP-запросы
+-- Перевод запросов на RoProxy API
 local function SmartServerHop()
     print("Server Hop: Поиск подходящего публичного сервера...")
     task.wait(1)
@@ -93,6 +93,7 @@ local function SmartServerHop()
     local PlaceId = game.PlaceId
     
     local success, result = pcall(function()
+        -- Запрос через прокси (так как Roblox блокирует прямые запросы к своему API изнутри игры)
         local url = string.format("https://roproxy.com", tostring(PlaceId))
         local response = game:HttpGet(url)
         local servers = HttpService:JSONDecode(response)
@@ -148,10 +149,13 @@ end)
 
 -- [[ Создание разделов фильтрации во вкладке Filter ]]
 local function CreateRaritySection(rarityName, fruits)
-    TabFilter:AddParagraph({"⚡ " .. rarityName .. " Fruits", "Выберите фрукты для автоматического подбора"})
+    Tabs.Filter:AddParagraph({
+        Title = "⚡ " .. rarityName .. " Fruits",
+        Content = "Выберите фрукты для автоматического подбора"
+    })
     for _, fruit in ipairs(fruits) do
-        TabFilter:AddToggle({
-            Name = fruit .. " Fruit",
+        Tabs.Filter:AddToggle(fruit .. "FruitToggle", {
+            Title = fruit .. " Fruit",
             Default = false,
             Callback = function(Value)
                 _G.FruitFilter[fruit] = Value
@@ -167,14 +171,22 @@ CreateRaritySection("Uncommon", FruitList.Uncommon)
 CreateRaritySection("Common", FruitList.Common)
 
 -- [[ Настройки Server Hop ]]
-TabSettings:AddParagraph({"Manual Navigation", "Принудительное управление миграцией между серверами."})
-TabSettings:AddButton({
-    Name = "Instant Server Hop",
+Tabs.Settings:AddParagraph({
+    Title = "Manual Navigation",
+    Content = "Принудительное управление миграцией между серверами."
+})
+
+Tabs.Settings:AddButton({
+    Title = "Instant Server Hop",
     Callback = function()
         SmartServerHop()
     end
 })
 
--- Выбор первой вкладки при старте
-Window:SelectTab(TabMain)
-print("Interface Loaded: Скрипт на базе Redz UI успешно запущен!")
+-- Выбор первой вкладки при старте во Fluent UI
+Window:SelectTab(1)
+Fluent:Notify({
+    Title = "Interface Loaded",
+    Content = "Скрипт на базе Fluent UI успешно запущен!",
+    Duration = 5
+})

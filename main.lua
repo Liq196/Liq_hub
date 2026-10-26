@@ -2,7 +2,7 @@
 -- [[ Optimized for Delta Emulator ]]
 -- [[ Instant Start Version - No Delay ]]
 
-local Fluent = loadstring(game:HttpGet("https://github.com"))()
+local Fluent = loadstring(game:HttpGet("https://githubusercontent.com"))()
 local SaveManager = loadstring(game:HttpGet("https://githubusercontent.com"))()
 local InterfaceManager = loadstring(game:HttpGet("https://githubusercontent.com"))()
 

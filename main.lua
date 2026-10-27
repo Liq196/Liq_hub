@@ -19,6 +19,7 @@ local Window = Fluent:CreateWindow({
 -- [[ Config & States ]]
 _G.AutoFindFruits = false
 _G.FruitFilter = {}
+local isProcessing = false -- Защита от одновременных ТП к нескольким фруктам (Anti-Ban)
 
 -- Актуальный список фруктов Update 30
 local FruitList = {
@@ -39,20 +40,10 @@ end
 -- [[ Вкладки интерфейса Fluent ]]
 local Tabs = {
     Main = Window:AddTab({ Title = "Main Sniper", Icon = "scroll" }),
-    Filter = Window:AddTab({ Title = "Fruit Filter", Icon = "swords" }),
-    Settings = Window:AddTab({ Title = "Server Hop", Icon = "user" })
+    Filter = Window:AddTab({ Title = "Fruit Filter", Icon = "swords" })
 }
 
--- [[ Элементы вкладки Main ]]
-local MainToggle = Tabs.Main:AddToggle("AutoFindFruitsToggle", {
-    Title = "Auto Find Fruits",
-    Default = false,
-    Callback = function(Value)
-        _G.AutoFindFruits = Value
-    end
-})
-
--- [[ Functions: Movement & Server Hop ]]
+-- [[ Functions: Movement ]]
 local function IsFilteredFruit(fruitName)
     for name, isChecked in pairs(_G.FruitFilter) do
         if string.find(string.lower(fruitName), string.lower(name)) and isChecked then
@@ -62,86 +53,108 @@ local function IsFilteredFruit(fruitName)
     return false
 end
 
--- Безопасный полет над землей для обхода жесткого античита Update 30
-local function SafeFlyToFruit(targetPos)
+-- Скрытное ТП по воздуху с защитой от флагов за падение и скорость
+local function SafeInvisibleTeleport(targetPos)
     local player = game.Players.LocalPlayer
     local character = player.Character or player.CharacterAdded:Wait()
     local root = character:WaitForChild("HumanoidRootPart", 10)
     
     if root then
-        local safePos = Vector3.new(targetPos.X, targetPos.Y + 3, targetPos.Z)
-        local distance = (root.Position - safePos).Magnitude
-        local duration = distance / 300 -- Скорость 300 для минимизации флагов античита
-        
-        local tweenService = game:GetService("TweenService")
-        local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-        local tween = tweenService:Create(root, tweenInfo, {CFrame = CFrame.new(safePos)})
-        
-        tween:Play()
-        tween.Completed:Wait()
-        task.wait(0.3)
-    end
-end
-
--- Перевод запросов на RoProxy API
-local function SmartServerHop()
-    print("Server Hop: Поиск подходящего публичного сервера...")
-    task.wait(1)
-    
-    local HttpService = game:GetService("HttpService")
-    local TeleportService = game:GetService("TeleportService")
-    local PlaceId = game.PlaceId
-    
-    local success, result = pcall(function()
-        -- Запрос через прокси (так как Roblox блокирует прямые запросы к своему API изнутри игры)
-        local url = string.format("https://roproxy.com", tostring(PlaceId))
-        local response = game:HttpGet(url)
-        local servers = HttpService:JSONDecode(response)
-        
-        for _, server in pairs(servers.data) do
-            if server.playing and server.playing < server.maxPlayers and server.id ~= game.JobId then
-                TeleportService:TeleportToPlaceInstance(PlaceId, server.id, game.Players.LocalPlayer)
-                return
-            end
-        end
-    end)
-    
-    if not success then
-        print("Server Hop Error: ", result)
-        task.wait(4)
-        SmartServerHop()
-    end
-end
-
--- [[ Sniper Thread Logic ]]
-task.spawn(function()
-    while task.wait(2) do 
-        if _G.AutoFindFruits then
-            local fruitFound = false
-            local workspaceItems = workspace:GetChildren()
-            
-            for _, item in ipairs(workspaceItems) do
-                if (item:IsA("Tool") or item:IsA("Model")) and string.find(item.Name, "Fruit") then
-                    if IsFilteredFruit(item.Name) then
-                        local handle = item:FindFirstChild("Handle") or item:FindFirstChildWhichIsA("BasePart")
-                        if handle then
-                            fruitFound = true
-                            print("Target Found: Движение к " .. item.Name)
-                            
-                            SafeFlyToFruit(handle.Position)
-                            
-                            pcall(function()
-                                game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", item.Name)
-                            end)
-                            task.wait(0.5)
-                        end
-                    end
+        local noclipConnection
+        noclipConnection = game:GetService("RunService").Stepped:Connect(function()
+            if character then
+                for _, part in pairs(character:GetChildren()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
                 end
             end
+        end)
+        
+        -- Имитация подбрасывания (как при легитных механиках игры)
+        root.CFrame = CFrame.new(root.Position.X, root.Position.Y + 450, root.Position.Z)
+        task.wait(0.3) -- Безопасная задержка для обработки сервером
+        
+        root.CFrame = CFrame.new(targetPos.X, root.Position.Y, targetPos.Z)
+        task.wait(0.3)
+        
+        root.CFrame = CFrame.new(targetPos.X, targetPos.Y + 2, targetPos.Z)
+        task.wait(0.4)
+        
+        if noclipConnection then noclipConnection:Disconnect() end
+    end
+end
+
+-- Легитный подбор предмета и его очистка (Логика Redz Hub)
+local function ProcessFruitPickup(item)
+    if isProcessing then return end
+    isProcessing = true
+    
+    local handle = item:FindFirstChild("Handle") or item:FindFirstChildWhichIsA("BasePart")
+    if handle then
+        print("Bypass Target: Скрытный перелет к " .. item.Name)
+        SafeInvisibleTeleport(handle.Position)
+        
+        local player = game.Players.LocalPlayer
+        local backpack = player:WaitForChild("Backpack", 5)
+        
+        -- Плавные попытки подбора с увеличенным интервалом (не триггерит Hyperion)
+        local attempts = 0
+        while not backpack:FindFirstChild(item.Name) and player.Character and attempts < 8 do
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(handle.Position)
+            task.wait(0.2)
+            attempts = attempts + 1
+        end
+        
+        local tool = backpack:FindFirstChild(item.Name)
+        if tool and player.Character then
+            player.Character.Humanoid:EquipTool(tool)
+            task.wait(0.5) -- Увеличенное время удержания в руке для эмуляции человека
             
-            if not fruitFound then
-                SmartServerHop()
+            pcall(function()
+                game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", item.Name)
+            end)
+            print("Успешно спрятано.")
+        end
+    end
+    
+    task.wait(1.5) -- Обязательный дебаунс между действиями
+    isProcessing = false
+end
+
+-- Функция проверки текущей карты (вызывается точечно, а не спамом)
+local function CheckCurrentMap()
+    if not _G.AutoFindFruits or isProcessing then return end
+    for _, item in ipairs(workspace:GetChildren()) do
+        if (item:IsA("Tool") or item:IsA("Model")) and string.find(item.Name, "Fruit") then
+            if IsFilteredFruit(item.Name) then
+                ProcessFruitPickup(item)
                 break
+            end
+        end
+    end
+end
+
+-- [[ Элементы вкладки Main ]]
+local MainToggle = Tabs.Main:AddToggle("AutoFindFruitsToggle", {
+    Title = "Auto Find Fruits (Bypass)",
+    Default = false,
+    Callback = function(Value)
+        _G.AutoFindFruits = Value
+        if Value then
+            -- Проверяем карту один раз в момент включения
+            task.spawn(CheckCurrentMap)
+        end
+    end
+})
+
+-- [[ Умные триггеры движка вместо бесконечных циклов ]]
+-- Скрипт сработает сам, БЕЗ спама запросами, как только фрукт упадет на карту или появится в мире
+workspace.ChildAdded:Connect(function(child)
+    if _G.AutoFindFruits then
+        -- Небольшая задержка, чтобы объект успел инициализироваться в workspace
+        task.wait(0.5)
+        if (child:IsA("Tool") or child:IsA("Model")) and string.find(child.Name, "Fruit") then
+            if IsFilteredFruit(child.Name) then
+                ProcessFruitPickup(child)
             end
         end
     end
@@ -159,6 +172,10 @@ local function CreateRaritySection(rarityName, fruits)
             Default = false,
             Callback = function(Value)
                 _G.FruitFilter[fruit] = Value
+                -- Если пользователь прожал фрукт при уже включенном чите — точечно проверяем карту
+                if Value and _G.AutoFindFruits then
+                    task.spawn(CheckCurrentMap)
+                end
             end
         })
     end
@@ -170,23 +187,9 @@ CreateRaritySection("Rare", FruitList.Rare)
 CreateRaritySection("Uncommon", FruitList.Uncommon)
 CreateRaritySection("Common", FruitList.Common)
 
--- [[ Настройки Server Hop ]]
-Tabs.Settings:AddParagraph({
-    Title = "Manual Navigation",
-    Content = "Принудительное управление миграцией между серверами."
-})
-
-Tabs.Settings:AddButton({
-    Title = "Instant Server Hop",
-    Callback = function()
-        SmartServerHop()
-    end
-})
-
--- Выбор первой вкладки при старте во Fluent UI
 Window:SelectTab(Tabs.Main)
 Fluent:Notify({
     Title = "Interface Loaded",
-    Content = "Скрипт на базе Fluent UI успешно запущен!",
+    Content = "Безопасный триггерный снайпер (Redz-Style) готов к работе!",
     Duration = 5
 })

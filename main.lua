@@ -184,7 +184,7 @@ Tabs.Settings:AddButton({
 })
 
 -- Выбор первой вкладки при старте во Fluent UI
-Window:SelectTab(1)
+Window:SelectTab(Tabs.Main)
 Fluent:Notify({
     Title = "Interface Loaded",
     Content = "Скрипт на базе Fluent UI успешно запущен!",

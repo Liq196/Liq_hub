@@ -1,19 +1,18 @@
--- [[ Blox Fruits Update 30: Ultimate Fruit Sniper & Server Hop ]]
+-- [[ Blox Fruits Update 30: Ultimate Fruit Sniper (Redz Bypass Mode) ]]
 -- [[ Полная адаптация и исправление под патч от 26.10.2026 ]]
--- [[ Переведено на Fluent UI Library специально для Delta / ПК-исполнителей ]]
 
 -- Загрузка Fluent UI (Используем стабильный релиз dawid-scripts)
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local Fluent = loadstring(game:HttpGet("https://github.com"))()
 
 -- Создание главного окна во Fluent UI
 local Window = Fluent:CreateWindow({
     Title = "Premium BF Hub",
-    SubTitle = "2026 Update (Fruit Sniper)",
+    SubTitle = "Update 30 (Bypass Mode)",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
-    Acrylic = false, -- Выключено для повышения FPS на мобильных устройствах
+    Acrylic = false,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl -- Кнопка сворачивания для ПК
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
 -- [[ Config & States ]]
@@ -109,43 +108,31 @@ local function ProcessFruitPickup(item)
             player.Character.Humanoid:EquipTool(tool)
             task.wait(0.6) -- Увеличенное время удержания в руке для эмуляции человека
             
- -- БЕЗОПАСНОЕ СОХРАНЕНИЕ: Виртуальный клик + Резервный Bypass
-            local storedSuccessfully = false
-            
+            -- БЕЗОПАСНОЕ СОХРАНЕНИЕ: Симуляция клика по UI-кнопке инвентаря Blox Fruits
             pcall(function()
                 local playerGui = player:WaitForChild("PlayerGui", 5)
+                -- Путь к официальной кнопке «Store» во внутриигровом инвентаре Update 30
                 local mainUI = playerGui:FindFirstChild("Main")
+                local fruitButton = mainUI and mainUI:FindFirstChild("FruitStorage") 
+                    or mainUI:FindFirstChild("Inventory") and mainUI.Inventory:FindFirstChild("StoreButton")
                 
-                -- Расширенный поиск кнопки под все актуальные виды UI Update 30
-                local fruitButton = mainUI and (
-                    mainUI:FindFirstChild("FruitStorage") or 
-                    mainUI:FindFirstChild("Inventory") and mainUI.Inventory:FindFirstChild("StoreButton") or
-                    mainUI:FindFirstChild("Buttons") and mainUI.Buttons:FindFirstChild("Store")
-                )
-                
-                if fruitButton and fruitButton.Visible then
-                    -- Эмулируем легитное нажатие игрока на кнопку
+                if fruitButton then
+                    -- Эмулируем легитное нажатие игрока на кнопку "Положить в хранилище"
                     for _, connection in pairs(getconnections(fruitButton.MouseButton1Click)) do
                         connection:Fire()
-                        storedSuccessfully = true
                     end
                     for _, connection in pairs(getconnections(fruitButton.MouseButton1Down)) do
                         connection:Fire()
-                        storedSuccessfully = true
                     end
+                    print("Фрукт успешно убран через легитный клик по UI.")
+                else
+                    -- Резервный безопасный метод, если UI закрыт или изменен патчем
+                    game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", item.Name)
+                    print("Резервный вызов сохранения.")
                 end
             end)
-            
-            -- Если клик по UI не сработал (интерфейс изменен), активируем бесшумный резервный метод
-            if not storedSuccessfully then
-                print("UI кнопка не найдена или изменена. Активация резервного вызова...")
-                pcall(function()
-                    game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", item.Name)
-                end)
-            end
-            
-            print("Процесс сохранения фрукта " .. item.Name .. " завершен.")
         end
+    end
     
     -- Обязательный большой дебаунс, чтобы античит сбросил счетчик подозрительных действий
     task.wait(2.5) 

@@ -1,13 +1,13 @@
--- [[ Blox Fruits Update 30: Ultimate Fruit Sniper (Redz Bypass Mode) ]]
+-- [[ Blox Fruits Update 30: Ultimate Fruit Sniper (Redz Bypass & Auto-Store Mode) ]]
 -- [[ Полная адаптация и исправление под патч от 26.10.2026 ]]
 
 -- Загрузка Fluent UI (Используем стабильный релиз dawid-scripts)
-local Fluent = loadstring(game:HttpGet("https://github.com"))()
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 
 -- Создание главного окна во Fluent UI
 local Window = Fluent:CreateWindow({
     Title = "Premium BF Hub",
-    SubTitle = "Update 30 (Bypass Mode)",
+    SubTitle = "Update 30 (Bypass & Auto-Store)",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Acrylic = false,
@@ -82,7 +82,7 @@ local function SafeInvisibleTeleport(targetPos)
     end
 end
 
--- Легитный подбор предмета и его скрытие через UI игры (Защита уровня Redz Hub)
+-- Легитный подбор предмета и автоматическое убирание в инвентарь (Redz Update 30 Method)
 local function ProcessFruitPickup(item)
     if isProcessing then return end
     isProcessing = true
@@ -103,38 +103,90 @@ local function ProcessFruitPickup(item)
             attempts = attempts + 1
         end
         
-        local tool = backpack:FindFirstChild(item.Name)
-        if tool and player.Character then
-            player.Character.Humanoid:EquipTool(tool)
-            task.wait(0.6) -- Увеличенное время удержания в руке для эмуляции человека
+        -- Проверяем, подобрали ли мы фрукт (он может быть в Backpack или уже экипирован в Character)
+        local tool = backpack:FindFirstChild(item.Name) or player.Character:FindFirstChild(item.Name)
+        
+        if tool then
+            -- Если фрукт в рюкзаке, берем его в руки (необходимо для вызова некоторых Remotes и UI)
+            if tool.Parent == backpack and player.Character:FindFirstChildWhichIsA("Humanoid") then
+                player.Character.Humanoid:EquipTool(tool)
+            end
+            task.wait(0.5) -- Эмуляция удержания фрукта человеком
             
-            -- БЕЗОПАСНОЕ СОХРАНЕНИЕ: Симуляция клика по UI-кнопке инвентаря Blox Fruits
-            pcall(function()
-                local playerGui = player:WaitForChild("PlayerGui", 5)
-                -- Путь к официальной кнопке «Store» во внутриигровом инвентаре Update 30
-                local mainUI = playerGui:FindFirstChild("Main")
-                local fruitButton = mainUI and mainUI:FindFirstChild("FruitStorage") 
-                    or mainUI:FindFirstChild("Inventory") and mainUI.Inventory:FindFirstChild("StoreButton")
-                
-                if fruitButton then
-                    -- Эмулируем легитное нажатие игрока на кнопку "Положить в хранилище"
-                    for _, connection in pairs(getconnections(fruitButton.MouseButton1Click)) do
-                        connection:Fire()
+            -- [[ КРИТИЧЕСКИЙ ДЛЯ UPDATE 30 БЛОК: СХРАНЕНИЕ ФРУКТА В ИНВЕНТАРЬ (STORE FRUIT) ]]
+            local storedSuccess = false
+            
+            -- МЕТОД 1: Прямой вызов Remotes через CommF_ (Основной серверный метод Redz Hub)
+            if not storedSuccess then
+                pcall(function()
+                    local remote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 3):WaitForChild("CommF_", 3)
+                    if remote then
+                        local response = remote:InvokeServer("StoreFruit", tool.Name)
+                        -- В Update 30 некоторые сервера возвращают статус успешности
+                        if response == true or response == 1 then
+                            print("[Method 1] Фрукт успешно сохранен через CommF_ Invoke.")
+                            storedSuccess = true
+                        end
                     end
-                    for _, connection in pairs(getconnections(fruitButton.MouseButton1Down)) do
-                        connection:Fire()
+                end)
+            end
+            
+            -- МЕТОД 2: Новый альтернативный Remote Event (Используется в некоторых саб-серверах патча Update 30)
+            if not storedSuccess then
+                pcall(function()
+                    local storeRemote = game:GetService("ReplicatedStorage"):FindFirstChild("StoreFruit", true) 
+                        or game:GetService("ReplicatedStorage"):FindFirstChild("FruitStorage", true)
+                    
+                    if storeRemote and storeRemote:IsA("RemoteEvent") then
+                        storeRemote:FireServer(tool.Name)
+                        print("[Method 2] Отправлен сигнал в альтернативный RemoteEvent.")
+                        storedSuccess = true
+                    elseif storeRemote and storeRemote:IsA("RemoteFunction") then
+                        storeRemote:InvokeServer(tool.Name)
+                        print("[Method 2] Отправлен сигнал в альтернативный RemoteFunction.")
+                        storedSuccess = true
                     end
-                    print("Фрукт успешно убран через легитный клик по UI.")
-                else
-                    -- Резервный безопасный метод, если UI закрыт или изменен патчем
-                    game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", item.Name)
-                    print("Резервный вызов сохранения.")
-                end
-            end)
+                end)
+            end
+            
+            -- МЕТОД 3: Bypass клик по официальной UI-кнопке инвентаря Blox Fruits (Защита от детекта пакетов)
+            if not storedSuccess then
+                pcall(function()
+                    local playerGui = player:WaitForChild("PlayerGui", 5)
+                    local mainUI = playerGui:FindFirstChild("Main")
+                    
+                    -- Проверяем все возможные пути расположения кнопки "Store" в новом UI Update 30
+                    local fruitButton = mainUI and (
+                        mainUI:FindFirstChild("FruitStorage") or 
+                        mainUI:FindFirstChild("Inventory") and mainUI.Inventory:FindFirstChild("StoreButton") or
+                        mainUI:FindFirstChild("FruitInventory") and mainUI.FruitInventory:FindFirstChild("Store")
+                    )
+                    
+                    if fruitButton and fruitButton.Visible then
+                        -- Безопасная эмуляция клика через getconnections
+                        for _, connection in pairs(getconnections(fruitButton.MouseButton1Click)) do
+                            connection:Fire()
+                        end
+                        for _, connection in pairs(getconnections(fruitButton.MouseButton1Down)) do
+                            connection:Fire()
+                        end
+                        print("[Method 3] Фрукт убран через клик по кнопке UI.")
+                        storedSuccess = true
+                    end
+                end)
+            end
+            
+            -- Финальная проверка: если фрукт пропал из рук/рюкзака, значит он в хранилище
+            task.wait(0.4)
+            if not (backpack:FindFirstChild(item.Name) or player.Character:FindFirstChild(item.Name)) then
+                print("👍 " .. item.Name .. " успешно перемещен в ваше хранилище фруктов!")
+            else
+                print("⚠️ Не удалось автоматически убрать " .. item.Name .. ". Попробуйте положить вручную.")
+            end
         end
     end
     
-    -- Обязательный большой дебаунс, чтобы античит сбросил счетчик подозрительных действий
+    -- Обязательный большой дебаунс (Anti-Cheat Bypass)
     task.wait(2.5) 
     isProcessing = false
 end
@@ -166,11 +218,9 @@ local MainToggle = Tabs.Main:AddToggle("AutoFindFruitsToggle", {
 })
 
 -- [[ Умные триггеры движка вместо бесконечных циклов ]]
--- Скрипт сработает сам, БЕЗ спама запросами, как только фрукт упадет на карту или появится в мире
 workspace.ChildAdded:Connect(function(child)
     if _G.AutoFindFruits then
-        -- Небольшая задержка, чтобы объект успел инициализироваться в workspace
-        task.wait(0.5)
+        task.wait(0.5) -- Задержка для полной инициализации объекта в мире
         if (child:IsA("Tool") or child:IsA("Model")) and string.find(child.Name, "Fruit") then
             if IsFilteredFruit(child.Name) then
                 ProcessFruitPickup(child)
@@ -199,7 +249,6 @@ local function CreateRaritySection(rarityName, fruits)
         })
     end
 end
-
 CreateRaritySection("Mythical", FruitList.Mythical)
 CreateRaritySection("Legendary", FruitList.Legendary)
 CreateRaritySection("Rare", FruitList.Rare)
@@ -211,4 +260,3 @@ Fluent:Notify({
     Title = "Interface Loaded",
     Content = "Безопасный триггерный снайпер (Redz-Style) готов к работе!",
     Duration = 5
-})

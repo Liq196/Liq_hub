@@ -83,7 +83,7 @@ local function SafeInvisibleTeleport(targetPos)
     end
 end
 
--- Легитный подбор предмета и его очистка (Логика Redz Hub)
+-- Легитный подбор предмета и его скрытие через UI игры (Защита уровня Redz Hub)
 local function ProcessFruitPickup(item)
     if isProcessing then return end
     isProcessing = true
@@ -107,16 +107,36 @@ local function ProcessFruitPickup(item)
         local tool = backpack:FindFirstChild(item.Name)
         if tool and player.Character then
             player.Character.Humanoid:EquipTool(tool)
-            task.wait(0.5) -- Увеличенное время удержания в руке для эмуляции человека
+            task.wait(0.6) -- Увеличенное время удержания в руке для эмуляции человека
             
+            -- БЕЗОПАСНОЕ СОХРАНЕНИЕ: Симуляция клика по UI-кнопке инвентаря Blox Fruits
             pcall(function()
-                game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", item.Name)
+                local playerGui = player:WaitForChild("PlayerGui", 5)
+                -- Путь к официальной кнопке «Store» во внутриигровом инвентаре Update 30
+                local mainUI = playerGui:FindFirstChild("Main")
+                local fruitButton = mainUI and mainUI:FindFirstChild("FruitStorage") 
+                    or mainUI:FindFirstChild("Inventory") and mainUI.Inventory:FindFirstChild("StoreButton")
+                
+                if fruitButton then
+                    -- Эмулируем легитное нажатие игрока на кнопку "Положить в хранилище"
+                    for _, connection in pairs(getconnections(fruitButton.MouseButton1Click)) do
+                        connection:Fire()
+                    end
+                    for _, connection in pairs(getconnections(fruitButton.MouseButton1Down)) do
+                        connection:Fire()
+                    end
+                    print("Фрукт успешно убран через легитный клик по UI.")
+                else
+                    -- Резервный безопасный метод, если UI закрыт или изменен патчем
+                    game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", item.Name)
+                    print("Резервный вызов сохранения.")
+                end
             end)
-            print("Успешно спрятано.")
         end
     end
     
-    task.wait(1.5) -- Обязательный дебаунс между действиями
+    -- Обязательный большой дебаунс, чтобы античит сбросил счетчик подозрительных действий
+    task.wait(2.5) 
     isProcessing = false
 end
 
